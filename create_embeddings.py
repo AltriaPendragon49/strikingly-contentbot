@@ -48,9 +48,28 @@ if __name__ == '__main__':
             if args.filter in url:
                 pages.append({'text': extract_text_from(url), 'source': url})
     else:  # args.mode == 'zendesk'
-        r = requests.get(args.zendesk)
-        articles = r.json().get('articles', [])
-        pages = [{"text": clean_html(article['body']), "source": article['html_url']} for article in articles]
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        all_articles = []
+        
+        nextpage = args.zendesk#分页
+        while nextpage:
+            r = requests.get(nextpage, headers=headers)
+            data = r.json()
+            articles = data.get('articles', [])
+            all_articles.extend(articles)
+            nextpage = data.get('next_page')
+        
+        def clean_html(html):
+            soup = BeautifulSoup(html, 'html.parser')
+            for tag in soup(['script', 'style', 'header', 'footer', 'nav']):
+                tag.decompose()
+            text = '\n'.join(p.get_text() for p in soup.find_all('p'))
+            return text.strip() or "No text content found"
+
+        pages = [{
+            "text": clean_html(article['body']),
+            "source": article['html_url']
+        } for article in all_articles]
 
     text_splitter = CharacterTextSplitter(chunk_size=1500, separator="\n")
     docs, metadatas = [], []
